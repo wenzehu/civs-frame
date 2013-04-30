@@ -5,7 +5,6 @@ function [rModel, pSample]=multiChainHMC(numFilter,lambdaF,filters,pCurrSample, 
 % we assume the pCurrSample is already a large canvas containing a grid of nRow by nCol sampled images
 
 %% 0. prepare the enlarged canvas of lambdaF 
-[sx sy]=size(pCurrSample);
 pgLambdaF = cell(size(lambdaF)); % p for paralle
 for iEl = 1:numel(lambdaF)
     pgLambdaF{iEl}=repmat(gpuArray(lambdaF{iEl}),nRow,nCol);
@@ -15,13 +14,12 @@ for iEl = 1:numel(filters)
    gFilters{iEl}=gpuArray(filters{iEl});
 end
 pgCurrSample = gpuArray(pCurrSample);
-%% 1 call the gpu HMC, version 2 assumes variables are in GPU already
+%% 1. correct the bounary condition, and run HMC
 pgSample = gpuMultiHMC(numFilter,pgLambdaF,gFilters,pgCurrSample,stepsize,L,nRow,nCol);
 %% 2 compute the rModel
+[sx sy]=size(lambdaF{1});
 rModel = cell(numFilter,1);
 gNumChain =gpuArray(nRow*nCol);
-sx = sx/nRow;
-sy = sy/nCol;
 for iFilter = 1:numFilter
       pgRSample=abs(filter2(gFilters{iFilter},pgSample));
       gRSample = parallel.gpu.GPUArray.zeros(sx,sy);
@@ -60,7 +58,7 @@ end
 p=p-stepsize/2*multiGradU(q, numFilter, gFilters, pgLambdaF);
 
 
-%% compute the accept probability for each chain independently 
+%% compute the accept probability for each chain separately 
 currentUMap = multiUMap(pgCurrSample, numFilter, gFilters, pgLambdaF);
 proposedUMap = multiUMap(q,numFilter,gFilters,pgLambdaF);
 current_p = current_p.^2; % reuse the variable, to save GPU memory
@@ -114,9 +112,3 @@ function pgUEnergyMap = multiUMap(pgCurrImage, numFilter, gFilters, pgLambdaF)
     end
     pgUEnergyMap = -pgUEnergyMap;
 end
-
-
-
-
-
-
