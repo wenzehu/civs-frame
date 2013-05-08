@@ -1,7 +1,26 @@
-% main function for the FRAME model for general images
+mex -largeArrayDims CgetMAX1.c;
+mex Ctransform.c;
+% paramters
 nOrient = 16;
-nTileRow = 8; % nTileRow \times nTileCol defines the number of paralle chains
-nTileCol = 12;
+nTileRow = 4; % nTileRow \times nTileCol defines the number of paralle chains
+nTileCol = 4;
+inPath = './positiveImage';
+outPath = './out';
+lambdaLearningRate = 0.01;
+outPath = './out';
+sx = 128;
+sy = 128;
+nIter = 500; % the number of iterations for learning lambda
+epsilon = 0.01; % step size for the leapfrog
+L = 10; % leaps for the leapfrog
+isLocalNormalize = false; % DO NOT SET TO TRUE !!!! This part has not been tested yet
+localHalfx=20;
+localHalfy=20;
+thresholdFactor=0.01;
+% main function for the FRAME model for general images
+if ~exist(outPath)
+   mkdir(outPath)
+end
 %% Step 0: prepare filter and training images
 mex -largeArrayDims CgetMAX1.c;
 
@@ -37,28 +56,25 @@ end
 
 filters = [f0 f1_r f1_i f2_r f2_i f3_r f3_i];
 numFilter = length(filters);
-filterSizes = zeros(size(filters));
+halfFilterSizes = zeros(size(filters));
 for iF = 1:numFilter
-    filterSizes(iF)=(size(filters{iF},1)-1)/2;
+    halfFilterSizes(iF)=(size(filters{iF},1)-1)/2;
 end
-
+overAllArea = sum((sx-2*halfFilterSizes).*(sy-2*halfFilterSizes));
 locationShiftLimit=0;
 orientShiftLimit=0;
 
-inPath = './positiveImage';
 imgCell = cell(0);
 files = dir([inPath '/*.jpg']);
 for iImg = 1:length(files)
     img = imread(fullfile(inPath,files(iImg).name));
-    img = imresize(img,[128, 128]);
+    img = imresize(img,[sx, sy]);
     img = im2double(rgb2gray(img));
     img = img-mean(img(:));
     img = img/std(img(:));
     imgCell{iImg}=img;
 end
 %% Step 1: compute training sample averages
-sx = size(img,1);
-sy = size(img,2);
 rHat = cell(numFilter,1);
 for iFilter = 1:numFilter
     rHat{iFilter}=zeros(sx,sy);
@@ -72,6 +88,22 @@ for iImg = 1:length(files)
         Y = filter2(filters{iFilter},imgCell{iImg});
         S1{iFilter} = abs(single(Y));
         M1{iFilter} = zeros(sx,sy,'single');
+    end
+    if isLocalNormalize
+    h0 = halfFilterSizes(1);    
+    S1(1)=LocalNormalize(S1(1),h0,localHalfx,localHalfy,thresholdFactor);
+    
+    h1 = halfFilterSizes(2);
+    S1(1+1:1+nOrient)= LocalNormalize(S1(1+1:1+nOrient),h1,localHalfx,localHalfy,thresholdFactor);
+    S1(1+nOrient+1: 1+2*nOrient) = LocalNormalize(S1(1+nOrient+1: 1+2*nOrient),h1,localHalfx,localHalfy,thresholdFactor);
+  
+    h2 = halfFilterSizes(1+2*nOrient+1);
+    S1(1+2*nOrient+1: 1+3*nOrient) = LocalNormalize(S1(1+2*nOrient+1: 1+3*nOrient),h2,localHalfx,localHalfy,thresholdFactor);
+    S1(1+3*nOrient+1: 1+4*nOrient) = LocalNormalize(S1(1+3*nOrient+1: 1+4*nOrient),h2,localHalfx,localHalfy,thresholdFactor);
+
+    h3 = halfFilterSizes(1+4*nOrient+1);  
+    S1(1+4*nOrient+1: 1+5*nOrient) = LocalNormalize(S1(1+4*nOrient+1: 1+5*nOrient),h3,localHalfx,localHalfy,thresholdFactor);
+    S1(1+5*nOrient+1: 1+6*nOrient) = LocalNormalize(S1(1+5*nOrient+1: 1+6*nOrient),h3,localHalfx,localHalfy,thresholdFactor);
     end
     %MAX1
     M1{1}=S1{1};
@@ -93,10 +125,10 @@ for iFilter = 1:numFilter
 end
 rHatNorm=0;
 for iFilter = 1:numFilter
-     h = filterSizes(iFilter);
-    rHatNorm = rHatNorm + sum(sum( rHat{iFilter}(h+1:end-h,h+1:end-h)))/(sx-2*h)/(sy-2*h);
+     h = halfFilterSizes(iFilter);
+    rHatNorm = rHatNorm + sum(sum( rHat{iFilter}(h+1:end-h,h+1:end-h)));
 end
-rHatNorm = rHatNorm/numFilter;
+rHatNorm = rHatNorm/overAllArea;
 
 disp(['finished filtering: '  num2str(toc) ' seconds']);
 
@@ -108,22 +140,27 @@ for iFilter = 1:numFilter
     lambdaF{iFilter} = zeros(size(img));
     % the following lines will be useful when lambda is not initialized as zero;
     %{
-    h = filterSizes(iFilter);
+    h = halfFilterSizes(iFilter);
     lambdaF{iFilter}([1:h,sx-h+1:sx],:)=0;
     lambdaF{iFilter}(:,[1:h,sy-h+1:sy])=0; 
     %}
     gradientF{iFilter}= zeros(size(img));
 end
 [sx sy]=size(img);
-currSamples = rand(sx*nTileRow,sy*nTileCol);
-
-step_width = .03;
-SSD=zeros(500,1);
-for iter = 1:500
+prevSamples = randn(sx*nTileRow,sy*nTileCol);
+initialLogZ =log((2*pi))*(overAllArea/2);
+SSD=zeros(nIter,1);
+logZRatioSeries = zeros(nIter,1);
+for iter = 1:nIter
     disp( [ 'iteration: ' num2str(iter)]);
     tic 
-    %[rModel, currSamples]=multiChainHMC(numFilter,lambdaF,filters,currSamples,0.01,10,nTileRow,nTileCol);
-    [rModel, currSamples]=multiChainHMC_G(numFilter,lambdaF,filters,currSamples,0.01,10,nTileRow,nTileCol);
+    
+    %[rModel, currSamples]=multiChainHMC(numFilter,lambdaF,filters,prevSamples,0.01,10,nTileRow,nTileCol);
+    [rModel, currSamples]=multiChainHMC_G(numFilter,lambdaF,filters,prevSamples,epsilon,L,nTileRow,nTileCol);
+    % compute z ratio
+    logZRatio = computeLogZRatio(prevSamples,currSamples,filters,gradientF,lambdaLearningRate,100);
+    logZRatioSeries(iter)=logZRatio;
+    %
     disp(['one iteration learning time: ' num2str(toc) ' seconds']);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%5   
@@ -131,18 +168,19 @@ for iter = 1:500
     gradientNorm = 0; 
     for iFilter = 1:numFilter
         gradientF{iFilter} = rHat{iFilter}-rModel{iFilter};
-        h = filterSizes(iFilter);
+        h = halfFilterSizes(iFilter);
         gradientF{iFilter}([1:h,sx-h+1:sx],:)=0;
         gradientF{iFilter}(:,[1:h,sy-h+1:sy])=0;
         aa = gradientF{iFilter}; 
-        gradientNorm = gradientNorm + sum(abs(aa(:)))/(sx-2*h)/(sy-2*h);
+        gradientNorm = gradientNorm + sum(abs(aa(:)));
     end
-    SSD(iter)=gradientNorm/numFilter;
-    %step_width = 1e-3%gradientNorm;
+    SSD(iter)=gradientNorm/overAllArea;
+    %lambdaLearningRate = 1e-3%gradientNorm;
     for iFilter = 1:numFilter
-        lambdaF{iFilter}=lambdaF{iFilter}+ step_width*gradientF{iFilter};
+        lambdaF{iFilter}=lambdaF{iFilter}+ lambdaLearningRate*gradientF{iFilter};
     end
-
+    prevSamples = currSamples;
+    % visualization
     % remove the bounaries and save image
     img = currSamples;
     %{
@@ -163,12 +201,21 @@ for iter = 1:500
     disp([ 'SSD: ' num2str(SSD(iter))]);
     disp([ 'Relative SSD: ' num2str(SSD(iter)/rHatNorm)]);
     img = (img-gLow)/(gHigh-gLow);
-    imwrite(img,[ num2str(iter,'%04d') '.png']);
+    imwrite(img,fullfile(outPath,[ num2str(iter,'%04d') '.png']));
 end
-
+% re-estimate logz
+currLogZ = initialLogZ + sum(logZRatioSeries);
+save([outPath,'/model.mat'],'lambdaF','filters','currSamples');
+disp([' Final LogZ: ' num2str(currLogZ)]);
 figure;
-plot(1:500,SSD);
-saveas(gcf,'SSD.png');
+plot(1:nIter,SSD);
+saveas(gcf,fullfile(outPath,'SSD.png'));
+saveas(gcf,fullfile(outPath,'SSD.pdf'));
 figure;
-plot(1:500,SSD/rHatNorm);
-saveas(gcf,'RelativeSSD.png');
+plot(1:nIter,SSD/rHatNorm);
+saveas(gcf,fullfile(outPath,'RelativeSSD.png'));
+saveas(gcf,fullfile(outPath,'RelativeSSD.pdf'));
+bar(1:nIter,logZRatioSeries);
+title(['Initial Log Z: ' num2str(initialLogZ,'%e') ', final logZ: ' num2str(currLogZ,'%e')]);
+saveas(gcf,fullfile(outPath,'logZRatios.png'));
+saveas(gcf,fullfile(outPath,'logZRatios.pdf'));
