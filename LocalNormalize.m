@@ -27,24 +27,10 @@ S1All = S1All/length(cosinPart);
 
 
 %integralImage
-intS1 = integralImage(S1All);  % for matlab 2013
-
-
-%local average
-meanMap = zeros(sx,sy);
-for x = h+1+halfSizex: sx-h-halfSizex
-    for y = h+1+halfSizey : sy-h-halfSizey
-        
-        % [sR sC eR eC] = deal(x-halfSizex, y-halfSizey, x+halfSizex, y+halfSizey);
-        % meanMap(x,y) = intS1(eR+1,eC+1) - intS1(eR+1,sC) - intS1(sR,eC+1) + intS1(sR,sC);
-        
-        meanMap(x,y) = intS1(x+halfSizex+1,y+halfSizey+1) + intS1(x-halfSizex,y-halfSizey)...
-                  -intS1(x-halfSizex,y+halfSizey+1) - intS1(x+halfSizex+1,y-halfSizey);
-              
-    end
-end
-meanMap = meanMap/(2*halfSizex+1)/(2*halfSizey+1);
-meanMap = sqrt(meanMap);
+meanFilter = ones(2*halfSizex+1,2*halfSizey+1);
+meanFilter = meanFilter;
+meanMap = filter2(meanFilter,S1All);
+meanMap = sqrt(meanMap/numel(meanFilter));
 
 
 % propagate local average to boundary
@@ -55,7 +41,7 @@ meanMap = padarray(meanMap,[h+halfSizex,h+halfSizey],'replicate','both');
 % perform normalization
 maxAverage = max(meanMap(:));
 meanMap = max(meanMap,maxAverage*thresholdFactor);
-invMeanMap = 1./meanMap;
+invMeanMap = single(1./meanMap);
 
 if isempty(sinePart)
     for iOri = 1:length(cosinPart)
