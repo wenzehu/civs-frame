@@ -1,21 +1,25 @@
-function [rModel, pSample]=multiChainHMC_G(numFilter,lambdaF,filters,pCurrSample, stepsize, L,nRow,nCol)
+function [rModel, pSample]=multiChainHMC_GV2(numFilter,lambdaF,filters,pCurrSample,stepsize,L,nRuns,nRow,nCol)
 % function to sample from multiple parallel chains, with gaussian prior
 % nRow and nCol defines the size of the chain grid.
 % we assume input variables lambdaF,filters,pCurrentSample are in CPU, and the return value will also be in CPU
 % we assume the pCurrSample is already a large canvas containing a grid of nRow by nCol sampled images
 
 %% 0. prepare the enlarged canvas of lambdaF 
-pgLambdaF = cell(size(lambdaF)); % p for paralle
+gLambdaF = cell(size(lambdaF)); % p for paralle
 for iEl = 1:numel(lambdaF)
-    pgLambdaF{iEl}=repmat(gpuArray(lambdaF{iEl}),nRow,nCol);
+    gLambdaF{iEl}=gpuArray(lambdaF{iEl});
 end
 gFilters = cell(size(filters));
 for iEl = 1:numel(filters)
    gFilters{iEl}=gpuArray(filters{iEl});
 end
 pgCurrSample = gpuArray(pCurrSample);
+
 %% 1. correct the bounary condition, and run HMC
-pgSample = gpuMultiHMC(numFilter,pgLambdaF,gFilters,pgCurrSample,stepsize,L,nRow,nCol);
+pgSample = pgCurrSample;
+for iRun= 1:nRuns
+    pgSample = gpuMultiHMC(numFilter,gLambdaF,gFilters,pgSample,stepsize,L,nRow,nCol);
+end
 %% 2 compute the rModel
 [sx sy]=size(lambdaF{1});
 rModel = cell(numFilter,1);
@@ -36,31 +40,31 @@ pSample = gather(pgSample);
 end % end of main function
 
 
-function [q]=gpuMultiHMC(numFilter,pgLambdaF, gFilters, pgCurrSample, stepsize, L,nRow,nCol)
+function [q]=gpuMultiHMC(numFilter,gLambdaF, gFilters, pgCurrSample, stepsize, L,nRow,nCol)
 % The main routine for sampling using HMC.
-% We assume input paramters pgLambdaF, gFitlers, pgCurrSample are alreay in GPU memory.
+% We assume input paramters gLambdaF, gFitlers, pgCurrSample are alreay in GPU memory.
 % The returned value is also in GPU memory.
-
 %% The traditional leapFrog steps
 q=pgCurrSample;
 sigma2 = .1; % sigma^2
-p = parallel.gpu.GPUArray.randn(size(q));
+p = parallel.gpu.GPUArray.randn(size(q),'single');
 p = p*sqrt(sigma2);
 current_p=p;
-p=p- (stepsize/2) * multiGradU(q, numFilter, gFilters, pgLambdaF);
+p=p- (stepsize/2) * multiGradU(q, numFilter, gFilters, gLambdaF,nRow,nCol);
 for i=1:L
   q=q+ stepsize * p/sigma2;
   if(i~=L) 
-      p=p-stepsize * multiGradU(q, numFilter, gFilters, pgLambdaF); 
+      p=p-stepsize * multiGradU(q, numFilter, gFilters, gLambdaF,nRow,nCol); 
   end
 end
 
-p=p-stepsize/2*multiGradU(q, numFilter, gFilters, pgLambdaF);
+p=p-stepsize/2*multiGradU(q, numFilter, gFilters, gLambdaF,nRow,nCol);
+
 
 
 %% compute the accept probability for each chain separately 
-currentUMap = multiUMap(pgCurrSample, numFilter, gFilters, pgLambdaF);
-proposedUMap = multiUMap(q,numFilter,gFilters,pgLambdaF);
+currentUMap = multiUMap(pgCurrSample, numFilter, gFilters, gLambdaF,nRow,nCol);
+proposedUMap = multiUMap(q,numFilter,gFilters,gLambdaF,nRow,nCol);
 current_p = current_p.^2; % reuse the variable, to save GPU memory
 p = p.^2;
 [sx sy]=size(pgCurrSample);
@@ -89,14 +93,15 @@ for iRow = 1:nRow
         end
     end %iRow
 end % iCol
+
 end % gpuMultiHMC
         
 
-function gdUMap = multiGradU(pgCurrImage, numFilter, gFilters, pgLambdaF)
+function gdUMap = multiGradU(pgCurrImage, numFilter, gFilters, gLambdaF,M,N)
 gdUMap = parallel.gpu.GPUArray.zeros(size(pgCurrImage));
 for iFilter = 1:numFilter
       pgRSampleMap = filter2(gFilters{iFilter},pgCurrImage);
-      pgRSampleMap = conv2(sign(pgRSampleMap).*pgLambdaF{iFilter},gFilters{iFilter},'same');
+      pgRSampleMap = conv2(sign(pgRSampleMap).*repmat(gLambdaF{iFilter},M,N),gFilters{iFilter},'same');
       gdUMap = gdUMap +pgRSampleMap;
 end
 gdUMap = -gdUMap + pgCurrImage;
@@ -104,11 +109,11 @@ end
       
 
 
-function pgUEnergyMap = multiUMap(pgCurrImage, numFilter, gFilters, pgLambdaF)
+function pgUEnergyMap = multiUMap(pgCurrImage, numFilter, gFilters, gLambdaF,M,N)
     pgUEnergyMap = parallel.gpu.GPUArray.zeros(size(pgCurrImage));
     for iFilter = 1:numFilter
         pgRSample = abs(filter2(gFilters{iFilter},pgCurrImage));
-        pgUEnergyMap = pgUEnergyMap + pgRSample.*pgLambdaF{iFilter}; 
+        pgUEnergyMap = pgUEnergyMap + pgRSample.*repmat(gLambdaF{iFilter},M,N); 
     end
     pgEnergyIMap = pgCurrImage.^2/2;
     pgUEnergyMap = -pgUEnergyMap + pgEnergyIMap;

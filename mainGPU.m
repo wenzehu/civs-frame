@@ -2,18 +2,18 @@ mex -largeArrayDims CgetMAX1.c;
 mex Ctransform.c;
 % paramters
 nOrient = 16;
-nTileRow = 4; % nTileRow \times nTileCol defines the number of paralle chains
-nTileCol = 4;
-inPath = './positiveImage';
-outPath = './out';
+nTileRow = 6; %nTileRow \times nTileCol defines the number of paralle chains
+nTileCol = 6;
+inPath = './positiveImageHummingbird';
+outPath = './6by6HummingbirdML';
 lambdaLearningRate = 0.01;
-outPath = './out';
 sx = 128;
 sy = 128;
-nIter = 500; % the number of iterations for learning lambda
+nIter = 50; % the number of iterations for learning lambda
 epsilon = 0.01; % step size for the leapfrog
 L = 10; % leaps for the leapfrog
-isLocalNormalize = false; % DO NOT SET TO TRUE !!!! This part has not been tested yet
+numSample = 3; % how many HMC calls for each learning iteration
+isLocalNormalize=true; % 
 localHalfx=20;
 localHalfy=20;
 thresholdFactor=0.01;
@@ -58,6 +58,7 @@ filters = [f0 f1_r f1_i f2_r f2_i f3_r f3_i];
 numFilter = length(filters);
 halfFilterSizes = zeros(size(filters));
 for iF = 1:numFilter
+    filters{iF} = single(filters{iF});
     halfFilterSizes(iF)=(size(filters{iF},1)-1)/2;
 end
 overAllArea = sum((sx-2*halfFilterSizes).*(sy-2*halfFilterSizes));
@@ -69,7 +70,7 @@ files = dir([inPath '/*.jpg']);
 for iImg = 1:length(files)
     img = imread(fullfile(inPath,files(iImg).name));
     img = imresize(img,[sx, sy]);
-    img = im2double(rgb2gray(img));
+    img = im2single(rgb2gray(img));
     img = img-mean(img(:));
     img = img/std(img(:));
     imgCell{iImg}=img;
@@ -86,24 +87,42 @@ for iImg = 1:length(files)
     % SUM1
     for iFilter = 1:numFilter
         Y = filter2(filters{iFilter},imgCell{iImg});
-        S1{iFilter} = abs(single(Y));
+        S1{iFilter} = abs(Y);
         M1{iFilter} = zeros(sx,sy,'single');
     end
     if isLocalNormalize
     h0 = halfFilterSizes(1);    
-    S1(1)=LocalNormalize(S1(1),h0,localHalfx,localHalfy,thresholdFactor);
+    S1(1)=LocalNormalize(S1(1),[],h0,round(0.6*h0),round(0.6*h0),thresholdFactor);
     
     h1 = halfFilterSizes(2);
-    S1(1+1:1+nOrient)= LocalNormalize(S1(1+1:1+nOrient),h1,localHalfx,localHalfy,thresholdFactor);
-    S1(1+nOrient+1: 1+2*nOrient) = LocalNormalize(S1(1+nOrient+1: 1+2*nOrient),h1,localHalfx,localHalfy,thresholdFactor);
+    [S1(1+1:1+nOrient),S1(1+nOrient+1: 1+2*nOrient)]= ...
+    LocalNormalize(S1(1+1:1+nOrient),S1(1+nOrient+1: 1+2*nOrient),h1,round(0.6*h1),round(0.6*h1),thresholdFactor);
   
     h2 = halfFilterSizes(1+2*nOrient+1);
-    S1(1+2*nOrient+1: 1+3*nOrient) = LocalNormalize(S1(1+2*nOrient+1: 1+3*nOrient),h2,localHalfx,localHalfy,thresholdFactor);
-    S1(1+3*nOrient+1: 1+4*nOrient) = LocalNormalize(S1(1+3*nOrient+1: 1+4*nOrient),h2,localHalfx,localHalfy,thresholdFactor);
+    [S1(1+2*nOrient+1: 1+3*nOrient), S1(1+3*nOrient+1: 1+4*nOrient)]= ...
+    LocalNormalize(S1(1+2*nOrient+1: 1+3*nOrient),S1(1+3*nOrient+1: 1+4*nOrient),h2,round(0.6*h2),round(0.6*h2),thresholdFactor);
+    
+    h3 = halfFilterSizes(1+4*nOrient+1);  
+    [S1(1+4*nOrient+1: 1+5*nOrient), S1(1+5*nOrient+1: 1+6*nOrient) ] = ...
+    LocalNormalize(S1(1+4*nOrient+1: 1+5*nOrient), S1(1+5*nOrient+1: 1+6*nOrient) ,h3,round(0.6*h3),round(0.6*h3),thresholdFactor);
+    
+    %{
+    h0 = halfFilterSizes(1);    
+    S1(1)=LocalNormalizeV2(S1(1),[],h0,localHalfx,localHalfy,thresholdFactor);
+    
+    h1 = halfFilterSizes(2);
+    S1(1+1:1+nOrient)= LocalNormalizeV2(S1(1+1:1+nOrient),[],h1,localHalfx,localHalfy,thresholdFactor);
+    S1(1+nOrient+1: 1+2*nOrient) = LocalNormalizeV2(S1(1+nOrient+1: 1+2*nOrient),[],h1,localHalfx,localHalfy,thresholdFactor);
+  
+    h2 = halfFilterSizes(1+2*nOrient+1);
+    S1(1+2*nOrient+1: 1+3*nOrient) = LocalNormalizeV2(S1(1+2*nOrient+1: 1+3*nOrient),[],h2,localHalfx,localHalfy,thresholdFactor);
+    S1(1+3*nOrient+1: 1+4*nOrient) = LocalNormalizeV2(S1(1+3*nOrient+1: 1+4*nOrient),[],h2,localHalfx,localHalfy,thresholdFactor);
 
     h3 = halfFilterSizes(1+4*nOrient+1);  
-    S1(1+4*nOrient+1: 1+5*nOrient) = LocalNormalize(S1(1+4*nOrient+1: 1+5*nOrient),h3,localHalfx,localHalfy,thresholdFactor);
-    S1(1+5*nOrient+1: 1+6*nOrient) = LocalNormalize(S1(1+5*nOrient+1: 1+6*nOrient),h3,localHalfx,localHalfy,thresholdFactor);
+    S1(1+4*nOrient+1: 1+5*nOrient) = LocalNormalizeV2(S1(1+4*nOrient+1: 1+5*nOrient),[],h3,localHalfx,localHalfy,thresholdFactor);
+    S1(1+5*nOrient+1: 1+6*nOrient) = LocalNormalizeV2(S1(1+5*nOrient+1: 1+6*nOrient),[],h3,localHalfx,localHalfy,thresholdFactor);
+    %}
+
     end
     %MAX1
     M1{1}=S1{1};
@@ -117,7 +136,7 @@ for iImg = 1:length(files)
     CgetMAX1(1,sx,sy,nOrient,locationShiftLimit,orientShiftLimit,1,S1(1+5*nOrient+1: 1+6*nOrient),M1(1+5*nOrient+1: 1+6*nOrient));
     
     for iFilter = 1:numFilter
-        rHat{iFilter}= rHat{iFilter}+double(M1{iFilter});
+        rHat{iFilter}= rHat{iFilter}+M1{iFilter};
     end
 end
 for iFilter = 1:numFilter
@@ -137,26 +156,24 @@ disp(['finished filtering: '  num2str(toc) ' seconds']);
 lambdaF = cell(numFilter,1);
 gradientF = cell(numFilter,1);
 for iFilter = 1:numFilter
-    lambdaF{iFilter} = zeros(size(img));
+    lambdaF{iFilter} = zeros(size(img),'single');
     % the following lines will be useful when lambda is not initialized as zero;
     %{
     h = halfFilterSizes(iFilter);
     lambdaF{iFilter}([1:h,sx-h+1:sx],:)=0;
     lambdaF{iFilter}(:,[1:h,sy-h+1:sy])=0; 
     %}
-    gradientF{iFilter}= zeros(size(img));
+    gradientF{iFilter}= zeros(size(img),'single');
 end
 [sx sy]=size(img);
-prevSamples = randn(sx*nTileRow,sy*nTileCol);
+prevSamples = single(randn(sx*nTileRow,sy*nTileCol));
 initialLogZ =log((2*pi))*(overAllArea/2);
 SSD=zeros(nIter,1);
 logZRatioSeries = zeros(nIter,1);
 for iter = 1:nIter
     disp( [ 'iteration: ' num2str(iter)]);
     tic 
-    
-    %[rModel, currSamples]=multiChainHMC(numFilter,lambdaF,filters,prevSamples,0.01,10,nTileRow,nTileCol);
-    [rModel, currSamples]=multiChainHMC_G(numFilter,lambdaF,filters,prevSamples,epsilon,L,nTileRow,nTileCol);
+    [rModel, currSamples]=multiChainHMC_G(numFilter,lambdaF,filters,prevSamples,epsilon,L,numSample,nTileRow,nTileCol);
     % compute z ratio
     logZRatio = computeLogZRatio(prevSamples,currSamples,filters,gradientF,lambdaLearningRate,100);
     logZRatioSeries(iter)=logZRatio;
@@ -205,7 +222,8 @@ for iter = 1:nIter
 end
 % re-estimate logz
 currLogZ = initialLogZ + sum(logZRatioSeries);
-save([outPath,'/model.mat'],'lambdaF','filters','currSamples');
+logZ = currLogZ;
+save([outPath,'/model.mat'],'lambdaF','filters','currSamples','logZ');
 disp([' Final LogZ: ' num2str(currLogZ)]);
 figure;
 plot(1:nIter,SSD);
