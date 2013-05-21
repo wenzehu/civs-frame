@@ -3,8 +3,8 @@ function [lambdaF,currSamples, LogZ]=FRAMElearnGPUV2(nIter,filters,rHat,initialS
 numFilter = numel(filters);
 [sx, sy]=size(rHat{1});
 halfFilterSizes = zeros(numFilter,1);
-for iFilter = 1:numFitler
-    halfFilterSizes(iFilter)=(size(filter{iFilter})-1)/2;
+for iFilter = 1:numFilter
+    halfFilterSizes(iFilter)=(size(filters{iFilter},1)-1)/2;
 end
 overAllArea = sum((sx-2*halfFilterSizes).*(sy-2*halfFilterSizes));
 nTileRow = size(initialSample,1)/sx;
@@ -12,7 +12,7 @@ nTileCol = size(initialSample,2)/sy;
 
 
 % sample 
-if isempty(initalSample)
+if isempty(initialSample)
     prevSamples = randn(sx*nTileRow,sy*nTileCol,'single');
 else
     prevSamples = initialSample;
@@ -29,7 +29,7 @@ if isempty(initialLambda)
     initialLogZ =log((2*pi))*(overAllArea/2);
 else
    for iFilter = 1:numFilter
-        lambdaF{iFilter} = initLambda{iFilter};
+        lambdaF{iFilter} = initialLambda{iFilter};
     end
 end
 for iFilter = 1:numFilter
@@ -42,19 +42,23 @@ for iFilter = 1:numFilter
         gradientF{iFilter}= zeros(sx,sy);
 end
 
-
+    rHatNorm = 0;
+    for iFilter= 1:numFilter
+        rHatNorm  = rHatNorm + sum(rHat{iFilter}(:).^2);
+    end
+    rHatNorm = rHatNorm/overAllArea;
 SSD=zeros(nIter,1);
 logZRatioSeries = zeros(nIter,1);
 for iter = 1:nIter
     disp( [ 'iteration: ' num2str(iter)]);
-    tic 
+    %tic 
     [rModel, currSamples]=multiChainHMC_G(numFilter,lambdaF,filters,prevSamples,epsilon,L,numSample,nTileRow,nTileCol);
     if isComputelogZ
     % compute z ratio
      logZRatio = computeLogZRatio(prevSamples,currSamples,filters,gradientF,lambdaLearningRate,100);
      logZRatioSeries(iter)=logZRatio;
     end
-    disp(['one iteration learning time: ' num2str(toc) ' seconds']);
+    %disp(['one iteration learning time: ' num2str(toc) ' seconds']);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%5   
     % compute gradient and do graidnet ascent
@@ -65,7 +69,7 @@ for iter = 1:nIter
         gradientF{iFilter}([1:h,sx-h+1:sx],:)=0;
         gradientF{iFilter}(:,[1:h,sy-h+1:sy])=0;
         aa = gradientF{iFilter}; 
-        gradientNorm = gradientNorm + sum(abs(aa(:)));
+        gradientNorm = gradientNorm + sum(aa(:).^2);
     end
     SSD(iter)=gradientNorm/overAllArea;
     for iFilter = 1:numFilter
@@ -80,7 +84,7 @@ for iter = 1:nIter
         gHigh = max(img(:));
         disp([ 'min: ' num2str(gLow) ' max: ' num2str(gHigh)]);
         disp([ 'SSD: ' num2str(SSD(iter))]);
-        %disp([ 'Relative SSD: ' num2str(SSD(iter)/rHatNorm)]);
+        disp([ 'Relative SSD: ' num2str(SSD(iter)/rHatNorm)]);
         img = (img-gLow)/(gHigh-gLow);
         imwrite(img, [savingFolder num2str(iter,'%04d') '.png']);
     end
