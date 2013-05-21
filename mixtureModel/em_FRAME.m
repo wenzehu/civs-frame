@@ -149,7 +149,7 @@ end
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
 %save dataWeightAll dataWeightAll; 
-load dataWeightAll; % remove this line if you do not want strict reproducibility
+%load dataWeightAll; % remove this line if you do not want strict reproducibility
 
 
 rHat = cell(numFilter,1);
