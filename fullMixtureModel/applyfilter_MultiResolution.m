@@ -5,7 +5,7 @@ function [allFiltered] = applyfilter_MultiResolution(I, filters, halfFilterSize,
 numImage = size(I, 2);    % number of images
 numFilter = size(filters, 2);   % number of orientations
 allFiltered = cell(numImage, numFilter);  % filtered images
-
+useDoG= mod(numFilter,nOrient);
 
 for iImg = 1:numImage
     S1 = cell(numFilter,1);
@@ -37,14 +37,22 @@ for iImg = 1:numImage
         [S1(2*nOrient+1:3*nOrient),S1(3*nOrient+1: 4*nOrient)]= ...
          LocalNormalize(S1(2*nOrient+1:3*nOrient),S1(3*nOrient+1: 4*nOrient),h2,round(0.6*h2),round(0.6*h2),thresholdFactor);
         end
+       if useDoG
+       h = halfFilterSize(end)
+       S1(end)=localNormalize(S1(end),[],h,round(0.6*h),round(0.6*h),thresholdFactor);
+       end
     end
-    
+        
     
     %MAX1
     CgetMAX1(1,sx,sy,nOrient,locationShiftLimit,orientShiftLimit,1,S1(1:nOrient),M1(1:nOrient));
     CgetMAX1(1,sx,sy,nOrient,locationShiftLimit,orientShiftLimit,1,S1(nOrient+1: 2*nOrient),M1(nOrient+1: 2*nOrient));
-       CgetMAX1(1,sx,sy,nOrient,locationShiftLimit,orientShiftLimit,1,S1(2*nOrient+1:3*nOrient),M1(2*nOrient+1:3*nOrient));
+    CgetMAX1(1,sx,sy,nOrient,locationShiftLimit,orientShiftLimit,1,S1(2*nOrient+1:3*nOrient),M1(2*nOrient+1:3*nOrient));
     CgetMAX1(1,sx,sy,nOrient,locationShiftLimit,orientShiftLimit,1,S1(3*nOrient+1: 4*nOrient),M1(3*nOrient+1: 4*nOrient));
+     
+    if useDoG 
+          M1{end}=S1{end};
+    end
     allFiltered(iImg,:)=M1;
 end
 

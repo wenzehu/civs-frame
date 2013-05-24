@@ -2,6 +2,9 @@ function [allFx, allFy,MAX2score,SUM2] = FRAME_SUM2_LogZV2(numResolution, allSiz
 allFx = zeros(1,numResolution);
 allFy = zeros(1,numResolution);
 MAX2score = zeros(1,numResolution)-Inf;
+dx = round(halfTempSizex*.2);
+dy = round(halfTempSizey*.2);
+
 for iResolution=1:numResolution
     [sx sy]=size(SUM1mapFind{iResolution,1});
     [lsx lsy]=size(lambdaF{1});
@@ -15,6 +18,12 @@ for iResolution=1:numResolution
     end
     SUM2map = SUM2map-logZ;  
     SUM2map = gather(SUM2map);
+    start_x = max(1,round(fsx/2-dx));
+    end_x = min(fsx,round(fsx/2+dx));
+    start_y = max(1,round(fsy/2-dy));
+    end_y = min(fsy, round(fsy/2+dy));
+    SUM2map = SUM2map(start_x:end_x,start_y:end_y);
+    [fsx fsy]=size(SUM2map);
     [MAX2score(iResolution),ind]=max(SUM2map(:));
     [indX,indY]=ind2sub([fsx fsy],ind);
     allFx(iResolution)=ceil(indX+(sx-fsx)/2);

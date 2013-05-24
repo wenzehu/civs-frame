@@ -4,9 +4,9 @@ mex CgetMAX1.c;
 mex Ccopy.c; % copy around detect location
 % path
 %%inPath = './positiveImages/cat';
-inPath = '../Image/PigHead';
+inPath = '../Image/PandaHead';
 cachePath = './feature';
-resultPath = '/home/wzhu/Dropbox/civs-frame/fullMixtureResult2Scales';
+resultPath = '/home/wzhu/Dropbox/civs-frame/PandaHead';
 if exist(cachePath,'dir')
 rmdir(cachePath,'s');    
 end
@@ -14,12 +14,12 @@ mkdir(cachePath)
 if exist(resultPath,'dir')
    rmdir(resultPath,'s');
 end
-    mkdir(resultPath)
-    mkdir(fullfile(resultPath,'img'));
+    mkdir(resultPath);
+    mkdir(fullfile(resultPath,'img'));;
 
 % feature
-sx = 65;
-sy = 65;
+sx =71;
+sy =71;
 halfTemplatex=floor(sx/2);
 halfTemplatey=floor(sy/2);
 padding_x=ceil(halfTemplatex/4);
@@ -29,10 +29,10 @@ locationShiftLimit=0;
 orientShiftLimit=0;
 localHalfx=20;
 localHalfy=20;
-isLocalNormalize=true; %
+isLocalNormalize=false; %
 isSeparateLocalNormalize=false;
 thresholdFactor=0.01;
-
+useDoG=true;
 % tepmlate learning
 nTileRow = 10; %nTileRow \times nTileCol defines the number of paralle chains
 nTileCol = 10;
@@ -47,13 +47,13 @@ isWarmStart = 1; % Learn template using its last iteration as starting point
 
 % unkown resolution, location, orientation, flip
 numResolution=3;
-scaleStepSize=0.2;
+scaleStepSize=0.1;
 flipOrNot=0;            % template flip Or not
 rotateShiftLimit = 3;   % template rotation  from -rotateShiftLimit to rotateShiftLimit, eg. -2:2 if rotateShiftLimit=2
 
 % mixture model
 numEMIteration=10;
-numCluster=2;
+numCluster=1;
 
 % pen for visualization
 pen = vision.ShapeInserter('Shape','Lines','BorderColor','Custom','CustomBorderColor',[0 0 255],'Antialiasing',1);
@@ -71,6 +71,11 @@ for i=1:nOrient
     f2_i{i} =imag(f2{i});
 end
 filters = [f1_r f1_i f2_r f2_i];
+if useDoG
+f0 = dog(8,0);
+filters = [filters f0];
+end
+
 numFilter = length(filters);
 halfFilterSizes = zeros(size(filters));
 for iF = 1:numFilter
@@ -172,6 +177,7 @@ for it = 1 : numEMIteration
             Mrot = MrotAll(iImg, c); Mflip = MflipAll(iImg, c);
             Mind = MindAll(iImg, c); MFx = MFxAll(iImg, c); MFy = MFyAll(iImg, c);
             t = t + 1;  
+    	    for sF=0:1
             for (iF = 1: 2) % sine or cosine part
                 for (orient = 1 : nOrient)
                     orient1 = orient - Mrot;
@@ -181,12 +187,17 @@ for it = 1 : numEMIteration
                     if (orient1 <= 0)
                         orient1 = orient1 + nOrient;
                     end
-                    Ccopy(SUM1mapLearn{t, orient+(iF-1)*nOrient}, SUM1mapFind{Mind, orient1+(iF-1)*nOrient}, MFx, MFy, floor(sx/2), floor(sy/2), sx, sy, allSizex(Mind), allSizey(Mind), Mrot*pi/nOrient);
+                    Ccopy(SUM1mapLearn{t, orient+(sF*2+iF-1)*nOrient}, SUM1mapFind{Mind, orient1+(sF*2+iF-1)*nOrient}, MFx, MFy, floor(sx/2), floor(sy/2), sx, sy, allSizex(Mind), allSizey(Mind), Mrot*pi/nOrient);
                 end
+            end
+            end
+            if useDoG
+                  Ccopy(SUM1mapLearn{t,end},SUM1mapFind{Mind,end},MFx,MFy,floor(sx/2),floor(sy/2),sx,sy,allSizex(Mind),allSizey(Mind),Mrot*pi/nOrient);
             end
             % If filp, the orientation of the flipped feature maps will also switch
             if (Mflip > 0)
                 SUM1mapLearnTmp = SUM1mapLearn(t, :);
+                for sF=0:1
                 for (iF = 1: 2)
                     for (iOrient = 1 : nOrient)
                         if (iOrient-1>0)
@@ -194,8 +205,12 @@ for it = 1 : numEMIteration
                         else
                             o = iOrient;
                         end
-                        SUM1mapLearn{t, o+(iF-1)*nOrient} = fliplr(SUM1mapLearnTmp{1, iOrient+(iF-1)*nOrient});
+                        SUM1mapLearn{t, o+(sF*2+iF-1)*nOrient} = fliplr(SUM1mapLearnTmp{1, iOrient+(sF*2+iF-1)*nOrient});
                     end
+                end
+                end
+                if useDoG
+                  SUM1mapLearn{t,end}=fliplr(SUM1mapLearnTmp{1,end});
                 end
             end
             
@@ -256,6 +271,7 @@ for it = 1 : numEMIteration
         for (flip = 0 : flipOrNot)
             if (flip > 0)
                 flip_lambdaF=cell(1,numFilter);
+                for sF= 0:1 % scale of filter
                 for (iF = 1: 2)
                     for iOrient = 1:nOrient
                         if (iOrient-1>0)
@@ -263,14 +279,19 @@ for it = 1 : numEMIteration
                         else
                             o = iOrient;
                         end
-                        flip_lambdaF{o+(iF-1)*nOrient} = fliplr(lambdaF{iOrient+(iF-1)*nOrient});
+                        flip_lambdaF{o+(sF*2+iF-1)*nOrient} = fliplr(lambdaF{iOrient+(sF*2+iF-1)*nOrient});
                     end
                 end
+                end
+                if useDoG
+                     flip_lambdaF{end}=fliplr(lambdaF{end});
+		end
                 lambdaF=flip_lambdaF;
             end
             for (rot = -rotateShiftLimit : rotateShiftLimit)
                 r = rot+rotateShiftLimit+1  + (rotateShiftLimit*2+1)*flip;
                 angle=rot*180/nOrient;
+		for sF=0:1
                 for (iF = 1: 2)
                     for iOrient = 1:nOrient
                         o=iOrient-rot;
@@ -280,10 +301,14 @@ for it = 1 : numEMIteration
                         if(o<=0)
                             o=o+nOrient;
                         end
-                        alllambda{r, o+(iF-1)*nOrient}= imrotate(lambdaF{iOrient+(iF-1)*nOrient},-angle,'bilinear','loose');
+                        alllambda{r, o+(sF*2+iF-1)*nOrient}= imrotate(lambdaF{iOrient+(sF*2+iF-1)*nOrient},-angle,'bilinear','loose');
                     end
                 end
-            end
+		end
+		if useDoG
+                alllambda{r,end}=imrotate(lambdaF{end},-angle,'bilinear','loose');
+           	end
+	    end
         end
         
         %scores every image by detetion process allowing transformed templates to locally shift
