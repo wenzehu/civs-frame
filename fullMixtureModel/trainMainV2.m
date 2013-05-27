@@ -150,7 +150,7 @@ for iCate = 1:nCate
 	    end
      end
 	% run inference on each testing images
-	for iTest = 1:nTest
+	parfor iTest = 1:nTest
 		disp(['To image ' num2str(iTest) ' of '  num2str(nTest)])
 		imgName= fullfile(trainingImages(iTest).path,trainingImages(iTest).name);
 		scoreMatrix(iCate,iTest)=testOneImageV2(imgName,alllambda,logZ,filters);
