@@ -26,7 +26,7 @@ if isempty(initialLambda)
     for iFilter = 1:numFilter
         lambdaF{iFilter} = zeros(sx,sy,'single');
     end
-    initialLogZ =log((2*pi))*(overAllArea/2);
+    initialLogZ =log((2*pi))*(sx*sy/2);
 else
    for iFilter = 1:numFilter
         lambdaF{iFilter} = initialLambda{iFilter};
