@@ -18,11 +18,13 @@ for iResolution=1:numResolution
     end
     SUM2map = SUM2map-logZ;  
     SUM2map = gather(SUM2map);
+%{
     start_x = max(1,round(fsx/2-dx));
     end_x = min(fsx,round(fsx/2+dx));
     start_y = max(1,round(fsy/2-dy));
     end_y = min(fsy, round(fsy/2+dy));
     SUM2map = SUM2map(start_x:end_x,start_y:end_y);
+%}
     [fsx fsy]=size(SUM2map);
     [MAX2score(iResolution),ind]=max(SUM2map(:));
     [indX,indY]=ind2sub([fsx fsy],ind);

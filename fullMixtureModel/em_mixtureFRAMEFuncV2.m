@@ -1,4 +1,4 @@
-function em_mixtureFRAMEFunc(trainImges,modelPath,cachePath)
+function em_mixtureFRAMEFuncV2(trainImges,modelPath,cachePath)
 % Learning algorithm for EM mixture clustering by FRAME model
 %% parameters and path
 resultPath = modelPath;
@@ -12,14 +12,14 @@ end
 mkdir(resultPath);
 mkdir(fullfile(resultPath,'img'));;
 
-sharedParameters;
+sharedParametersV2;
 
 % pen for visualization
-%pen = vision.ShapeInserter('Shape','Lines','BorderColor','Custom','CustomBorderColor',[0 0 255],'Antialiasing',1);
+pen = vision.ShapeInserter('Shape','Lines','BorderColor','Custom','CustomBorderColor',[0 0 255],'Antialiasing',1);
 
 %% Step 0: prepare filter and training images
 
-f1 = MakeFilter(0.7,nOrient);
+f1 = MakeFilter(0.5,nOrient);
 for i=1:nOrient
     f1_r{i} =real(f1{i});
     f1_i{i} =imag(f1{i});
@@ -58,13 +58,14 @@ for iImg = 1:numImage
     copyfile(fullfile(trainImges(iImg).path,trainImges(iImg).name),fullfile(resultPath,'img',trainImges(iImg).name));
     disp(['======> start filtering and maxing image ' num2str(iImg)]); tic
     img = imread(fullfile(trainImges(iImg).path,trainImges(iImg).name));
-    img = imresize(img,[sx, sy]);
+    img = imresize(img,[sx+padding_x, sy+padding_y]);
     if size(img,3)==1
         img = gray2rgb(img);
     end
-    colorImg = padarray(img,[padding_x padding_y],'replicate');
+    colorImg=img;
+    %colorImg = padarray(img,[padding_x padding_y],'replicate');
     img = im2single(rgb2gray(img));
-    img = padarray(img,[padding_x padding_y],'replicate');
+    %img = padarray(img,[padding_x padding_y],'replicate');
     img = img-mean(img(:));
     img = img/std(img(:));
     
@@ -97,7 +98,7 @@ end
 overAllArea = sum((sx-2*halfFilterSizes).*(sy-2*halfFilterSizes));
 clusters=struct('rHat',[],'lambdaF',[],'logZ',[],'sampleImages',[],'mixtureWeight',[]);
 for iCluster = 1:numCluster
-    clusters(iCluster).logZ=log((2*pi))*(overAllArea/2);
+    clusters(iCluster).logZ=log((2*pi))*(sx*sy/2);
     for iFilter = 1:numFilter
         clusters(iCluster).lambdaF{iFilter} = zeros(sx,sy,'single');
     end
@@ -232,6 +233,9 @@ for it = 1 : numEMIteration
         disp(['E-step of iteration ' num2str(it) 'for cluster' num2str(c)]);
         disp(['rotating template of cluster' num2str(c)]);
         alllambda=cell((2*rotateShiftLimit+1)*(1+flipOrNot), numFilter); % the transformed tempaltes (lambdaF)
+	for iFilter = 1:numFilter
+               lambdaF{iFilter}=gpuArray(lambdaF{iFilter});
+        end
         for (flip = 0 : flipOrNot)
             if (flip > 0)
                 flip_lambdaF=cell(1,numFilter);
@@ -312,9 +316,9 @@ for it = 1 : numEMIteration
             combined_Vertices=combined_Vertices*R+ones(size(combined_Vertices,1),1)*[MFx, MFy];
             combined_Vertices = [combined_Vertices combined_Vertices([2:end 1],:)];            
             combined_Vertices=combined_Vertices/scaleFactors(Mind);
-            %visImg = step(pen,colorImg,int32(combined_Vertices(:,[2 1 4 3])));
-            %fileName= fullfile(resultPath,['iteration' num2str(it)], ['cluster-' num2str(c) '-training-' num2str(iImg,'%04d') '.png']);
-            %imwrite(visImg,fileName);
+            visImg = step(pen,colorImg,int32(combined_Vertices(:,[2 1 4 3])));
+            fileName= fullfile(resultPath,['iteration' num2str(it)], ['cluster-' num2str(c) '-training-' num2str(iImg,'%04d') '.png']);
+            imwrite(visImg,fileName);
             disp(['detection time for image ' num2str(iImg) ' takes ' num2str(toc) ' seconds']);
         end% iImg
     end %c, the cluster index

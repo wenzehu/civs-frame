@@ -45,7 +45,7 @@ for iImg = 1:numImage
         end
        if useDoG
        h = halfFilterSize(end)
-       S1(end)=localNormalize(S1(end),[],h,round(0.6*h),round(0.6*h),thresholdFactor);
+       S1(end)=LocalNormalize(S1(end),[],h,round(0.6*h),round(0.6*h),thresholdFactor);
        end
     end
         
@@ -62,9 +62,3 @@ for iImg = 1:numImage
     end
     allFiltered(iImg,:)=M1;
 end
-
-
-
-
-
-
