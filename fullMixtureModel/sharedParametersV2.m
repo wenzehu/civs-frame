@@ -13,7 +13,7 @@ localHalfy=20;
 isLocalNormalize=true; %
 isSeparateLocalNormalize=false;
 thresholdFactor=0.01;
-useDoG=false;
+useDoG=true;
 % tepmlate learning
 nTileRow = 15; %nTileRow \times nTileCol defines the number of paralle chains
 nTileCol = 15;

@@ -2,9 +2,9 @@
 mex CgetMAX1.c;
 mex Ccopy.c; % copy around detect location
 dataPath = '~/Documents/civs-frame/Image'
-resultPath ='~/Dropbox/civs-frame/animalExpV2L'
-modelPath = '~/Dropbox/civs-frame/animalExpV2L/models';
-cachePath = '~/Documents/civs-frame/animalExpV2L/cache';
+resultPath ='~/Dropbox/civs-frame/animalExpV2LMSD'
+modelPath = '~/Dropbox/civs-frame/animalExpV2LMSD/models';
+cachePath = '~/Documents/civs-frame/animalExpV2LMSD/cache';
 if exist(cachePath,'dir')
    rmdir(cachePath,'s')
 end

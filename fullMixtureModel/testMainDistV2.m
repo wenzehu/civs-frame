@@ -1,6 +1,6 @@
 dataPath = 'C:/Users/wzhu/Documents/Image';
-resultPath ='C:/Users/wzhu/Dropbox/civs-frame/animalExpV2L';
-modelPath = 'C:/Users/wzhu/Dropbox/civs-frame/animalExpV2L/models';
+resultPath ='C:/Users/wzhu/Dropbox/civs-frame/animalExpV2LMSD';
+modelPath = 'C:/Users/wzhu/Dropbox/civs-frame/animalExpV2LMSD/models';
 %% setup the cluster machine
 parallel.defaultClusterProfile('test01');
 c = parcluster('test01');
@@ -18,20 +18,18 @@ for iTest = 1:nTest
 end
 %% testing stage
 sharedParametersV2
-f1 = MakeFilter(0.5,nOrient);
+f1 = MakeFilter(0.7,nOrient);
 for i=1:nOrient
     f1_r{i} =real(f1{i});
     f1_i{i} =imag(f1{i});
 end
 filters = [f1_r f1_i];
-%{
 f2 = MakeFilter(0.35,nOrient);
 for i=1:nOrient
     f2_r{i} =real(f2{i});
     f2_i{i} =imag(f2{i});
 end
 filters = [f1_r f1_i f2_r f2_i];
-%}
 if useDoG
     f0  = single(dog(8,0));
     filters = [filters f0];
@@ -45,6 +43,7 @@ for iCate = 1:nCate
     % load testing models
     cate_model_path = fullfile(modelPath,cateNames{iCate});
     cate_model_name= fullfile(cate_model_path,'model_final.mat');
+    disp(['trying to find file ' cate_model_name]);
     while ~exist(cate_model_name,'file');
         pause(60);
     end
@@ -62,7 +61,7 @@ for iCate = 1:nCate
     for (flip = 0 : flipOrNot)
         if (flip > 0)
             flip_lambdaF=cell(1,numFilter);
-            for sF= 0:0 % scale of filter
+            for sF= 0:1 % scale of filter
                 for (iF = 1: 2)
                     for iOrient = 1:nOrient
                         if (iOrient-1>0)
@@ -82,7 +81,7 @@ for iCate = 1:nCate
         for (rot = -rotateShiftLimit : rotateShiftLimit)
             r = rot+rotateShiftLimit+1  + (rotateShiftLimit*2+1)*flip;
             angle=rot*180/nOrient;
-            for sF=0:0
+            for sF=0:1
                 for (iF = 1: 2)
                     for iOrient = 1:nOrient
                         o=iOrient-rot;
