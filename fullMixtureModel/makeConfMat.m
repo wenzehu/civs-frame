@@ -1,6 +1,6 @@
-[confMat,AF]=makeConfMat(labels,scoreMat);
+function [confMat,AF]=makeConfMat(labels,scoreMat);
 % asume scoreMat is a marix of (nCate, nImage), where each entry is the logP
-[~,idx]=max(scoreMat);
+[V,idx]=max(scoreMat);
 [nCate, nTest]=size(scoreMat);
 T = zeros(nCate,nTest);
 Y = zeros(nCate,nTest);
@@ -9,6 +9,10 @@ for iTest= 1:nTest
     Y(idx(iTest),iTest)=1;
 end
 
-confMat = confusion(T,Y);
-AF = mean(diag(confMat));
+[AF, confMat] = confusion(T,Y);
+for iRow = 1:size(confMat,1)
+    confMat(iRow,:)=confMat(iRow,:)/sum(confMat(iRow,:));
+end
+AF=1-AF;
+%AF = mean(diag(confMat));
 %
