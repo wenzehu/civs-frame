@@ -1,4 +1,4 @@
-function [allFx, allFy,MAX2score,SUM2] = FRAME_SUM2_LogZV2(numResolution, allSizex, allSizey, numFilter, lambdaF, logZ, SUM1mapFind,halfTempSizex,halfTempSizey,Mh)
+function [allFx, allFy,MAX2score,SUM2] = FRAME_SUM2_LogZV3(numResolution, allSizex, allSizey, numFilter, lambdaF,logZ,multiResImage, SUM1mapFind,halfTempSizex,halfTempSizey,Mh)
 allFx = zeros(1,numResolution);
 allFy = zeros(1,numResolution);
 MAX2score = zeros(1,numResolution)-Inf;
@@ -11,9 +11,11 @@ for iResolution=1:numResolution
     if lsx>sx || lsy>sy % filter is larger than image
        continue;
     end
-    SUM2map = filter2(lambdaF{1},SUM1mapFind{iResolution,1},'valid');
+    gaussianFilter = ones(size(lambdaF{1}),'single');
+    SUM2map = filter2(gaussianFilter,multiResImage{iResolution}.^2,'valid');
+    SUM2map = -SUM2map/2;
     [fsx fsy]=size(SUM2map);
-    for iFilter=2:numFilter
+    for iFilter=1:numFilter
      SUM2map = SUM2map + filter2(lambdaF{iFilter},SUM1mapFind{iResolution,iFilter},'valid');
     end
     SUM2map = SUM2map-logZ;  
@@ -32,3 +34,4 @@ for iResolution=1:numResolution
     allFy(iResolution)=ceil(indY+(sy-fsy)/2);
 end% iResolution
 end % function
+ 
