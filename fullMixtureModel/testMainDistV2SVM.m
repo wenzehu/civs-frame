@@ -11,11 +11,19 @@ matlabpool('addattachedfiles',tmp_list);
 load(fullfile(resultPath,'split.mat'));
 nCate= max(testingLabels);
 nTest = length(testingImages);
-imageCell=cell(nTest,1);
+testImageCell=cell(nTest,1);
 for iTest = 1:nTest
     folderName = cateNames{testingLabels(iTest)};
-    imageCell{iTest} = imread(fullfile(dataPath,folderName,testingImages(iTest).name));
+    testImageCell{iTest} = imread(fullfile(dataPath,folderName,testingImages(iTest).name));
 end
+
+nTrain = length(trainingImages);
+trainImageCell = cell(nTrain,1);
+for iTrain = 1:nTrain
+    folderName = cateNames{trainingLabels(iTrain)};
+    trainImageCell{iTrain}=imread(fullfile(dataPath,folderName,trainingImages(iTrain).name));
+end
+
 %% testing stage
 sharedParametersV2
 f1 = MakeFilter(0.7,nOrient);
@@ -38,7 +46,9 @@ numFilter = length(filters);
 for iFilter = 1:numFilter
     filters{iFilter}=(single(filters{iFilter}));
 end
-scoreMatrix = zeros(nCate,nTest);
+trainScoreMatrix = zeros(nCate,nTrain);
+testScoreMatrix = zeros(nCate,nTest);
+
 for iCate = 1:nCate
     % load testing models
     cate_model_path = fullfile(modelPath,cateNames{iCate});
@@ -104,33 +114,40 @@ for iCate = 1:nCate
     % run the job
 	disp('begin computing scores');
     parfor iTest=1:nTest
-        scoreMatrix(iCate,iTest)=testOneImageDistV2(imageCell{iTest},alllambda,logZ,filters);
+        testScoreMatrix(iCate,iTest)=testOneImageDistV2(testImageCell{iTest},alllambda,logZ,filters);
     end
-    %{
-    inputDataCell = cell(nTest,1);
-    for iTest = 1:nTest
-           inputDataCell{iTest}={imageCell{iTest},alllambda,logZ,filters};
+    parfor iTrain = 1:nTrain
+        trainScoreMatrix(iCate,iTrain)=testOneImageDistV2(trainImageCell{iTrain},alllambda,logZ,filters);
     end
-    nBatch= ceil(nTest/batchSize);
-    for iBatch = 1:nBatch
-    job1 = createJob(c);
-    job1.AttachedFiles = tmp_list;
-    createTask(job1,@testOneImageDist,1,inputDataCell(iBatch:iBatch+batchSize-1));
-    submit(job1);
-    wait(job1);
-    partialResults = fetchOutputs(job1);
-    partialRsults = cell2mat(partialResults);
-    scoreMatrix(iCate,iBatch:iBatch+batchSize-1)=partialResults;
-    delete(job1);
-    end
-    %}
     % run inference on each testing images
-    save(fullfile(resultPath,['scoreMat' num2str(iCate) '.mat']),'scoreMatrix');
+    save(fullfile(resultPath,['scoreMat' num2str(iCate) '.mat']),'trainScoreMatrix','testScoreMatrix');
     disp(['finished category ' cateNames{iCate}	' at' datestr(now)]);
 end
+matlabpool close
+save(fullfile(resultPath,['scoreMat_final.mat']),'trainScoreMatrix','testScoreMatrix');
+%% SVM training 
 
+
+
+load(fullfile(resultPath,['scoreMat_final.mat']),'trainScoreMatrix','testScoreMatrix');
+for iCate = 1:nCate
+    % load testing models
+    cate_model_path = fullfile(modelPath,cateNames{iCate});
+    cate_model_name= fullfile(cate_model_path,'model_final.mat');
+    model = load(cate_model_name,'clusters');
+    logZ= model.clusters.logZ;
+    trainScoreMatrix(iCate,:)=trainScoreMatrix(iCate,:)+logZ;
+    testScoreMatrix(iCate,:)=testScoreMatrix(iCate,:)+logZ;
+end
+
+addpath('./liblinear-1.93/matlab');
+libLinearOptions='-s 0 -c 1 -B 1' ; % no bias if -B<0
+model = train(trainingLabels',sparse(trainScoreMatrix'),libLinearOptions);
+[predicted_label, accuracy]=predict(testingLabels',sparse(testScoreMatrix'),model);
+
+%{
 [confMat,AF]=makeConfMat(testingLabels,scoreMatrix);
 disp(confMat)
 disp(AF)
 save(fullfile(resultPath,['confMat' num2str(iCate) '.mat']),'confMat','AF');
-matlabpool close
+%}
