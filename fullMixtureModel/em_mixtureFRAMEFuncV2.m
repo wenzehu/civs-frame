@@ -19,20 +19,18 @@ pen = vision.ShapeInserter('Shape','Lines','BorderColor','Custom','CustomBorderC
 
 %% Step 0: prepare filter and training images
 
-f1 = MakeFilter(0.5,nOrient);
+f1 = MakeFilter(0.7,nOrient);
 for i=1:nOrient
     f1_r{i} =real(f1{i});
     f1_i{i} =imag(f1{i});
 end
 filters = [f1_r f1_i];
-%{
 f2 = MakeFilter(0.35,nOrient);
 for i=1:nOrient
     f2_r{i} =real(f2{i});
     f2_i{i} =imag(f2{i});
 end
 filters = [f1_r f1_i f2_r f2_i];
-%}
 if useDoG
 f0 = dog(8,0);
 filters = [filters f0];
@@ -142,7 +140,7 @@ for it = 1 : numEMIteration
             Mrot = MrotAll(iImg, c); Mflip = MflipAll(iImg, c);
             Mind = MindAll(iImg, c); MFx = MFxAll(iImg, c); MFy = MFyAll(iImg, c);
             t = t + 1;  
-    	    for sF=0:0
+    	    for sF=0:1
             for (iF = 1: 2) % sine or cosine part
                 for (orient = 1 : nOrient)
                     orient1 = orient - Mrot;
@@ -162,7 +160,7 @@ for it = 1 : numEMIteration
             % If filp, the orientation of the flipped feature maps will also switch
             if (Mflip > 0)
                 SUM1mapLearnTmp = SUM1mapLearn(t, :);
-                for sF=0:0
+                for sF=0:1
                 for (iF = 1: 2)
                     for (iOrient = 1 : nOrient)
                         if (iOrient-1>0)
@@ -217,7 +215,7 @@ for it = 1 : numEMIteration
             for iFilter = 1:numFilters
                 lambdaF{iFilter}=zeros(sx,sy,'single');
             end
-            logZ = 0;
+            logZ = log(2*pi)*(sx*sy/2);
             sampleImages = randn(sx*nTileRow,sy*nTileCol,'single');
             [lambdaF,currSample,logZ]=FRAMElearnGPUV2(nIter,filters,clusters(c).rHat,sampleImages,lambdaF,logZ,...
                 epsilon,L,lambdaLearningRate,numSample, isSaved,savingFolder,isComputelogZ);
@@ -239,7 +237,7 @@ for it = 1 : numEMIteration
         for (flip = 0 : flipOrNot)
             if (flip > 0)
                 flip_lambdaF=cell(1,numFilter);
-                for sF= 0:0 % scale of filter
+                for sF= 0:1 % scale of filter
                 for (iF = 1: 2)
                     for iOrient = 1:nOrient
                         if (iOrient-1>0)
@@ -259,7 +257,7 @@ for it = 1 : numEMIteration
             for (rot = -rotateShiftLimit : rotateShiftLimit)
                 r = rot+rotateShiftLimit+1  + (rotateShiftLimit*2+1)*flip;
                 angle=rot*180/nOrient;
-		for sF=0:0
+		for sF=0:1
                 for (iF = 1: 2)
                     for iOrient = 1:nOrient
                         o=iOrient-rot;

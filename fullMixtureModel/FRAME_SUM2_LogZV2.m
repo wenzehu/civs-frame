@@ -32,4 +32,3 @@ for iResolution=1:numResolution
     allFy(iResolution)=ceil(indY+(sy-fsy)/2);
 end% iResolution
 end % function
- 
